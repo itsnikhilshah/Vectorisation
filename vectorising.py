@@ -7,36 +7,53 @@ from time import time
 import pickle
 import configparser
 
+
+def clean_course_desc(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+
+    corrected_lines = []
+    for line in lines:
+        if line.strip() and (line[0].isalnum() and "-" in line):
+            corrected_lines.append(line)
+        elif corrected_lines: 
+            print('Correction made')
+            corrected_lines[-1] = corrected_lines[-1].strip() + " " + line
+
+    with open(file_path, 'w', encoding='utf-8') as file:
+        file.writelines(corrected_lines)
+
+
 class PineconeInteraction:
     def __init__(self):
         config=configparser.ConfigParser()
         config.read('settings.ini')
         self.secret_key=config['DEFAULT']['SECRET_KEY']
-        self.environment=config['DEFAULT']['ENVIRONMENT_LOCATION']
         index_name = 'serc-index'
-        try:
-            pc=Pinecone(api_key=self.secret_key)
-            active_indexes=pc.list_indexes()
-            index_description=pc.describe_index(index_name)
-            self.index=pc.Index(index_name)
-        except Exception as e:
-            pc=Pinecone(api_key=self.secret_key)
-            print("Creating Index")
-            pc.create_index(index_name, dimension=1024,metric="euclidean" ,spec=PodSpec(
-    environment="us-west4-gcp",
-    pod_type="p1.x1",
-    pods=1
-  ))
-            active_indexes=pc.list_indexes()
-            index_description=pc.describe_index(index_name)
-            self.index=pc.Index(index_name)
+        pc=Pinecone(api_key=self.secret_key)
+
+        existing_indexes = pc.list_indexes().names()
+        if index_name in existing_indexes:
+            print(f"Index '{index_name}' already exists.")
+        else:
+            pc.create_index(
+                name=index_name,
+                dimension=1024,
+                metric="cosine",
+                spec=PodSpec(
+                environment="gcp-starter"
+                )
+            )
         
+        self.index=pc.Index(index_name)
+
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         model_name = 'sentence-transformers/all-roberta-large-v1'
         self.model = SentenceTransformer(model_name)
         self.corpus_sentences = []
     
     def corpus_embeddings(self,filename):
+        clean_course_desc(filename)
         txt_file = open(filename,"r", encoding='utf8') 
         txt_lines=txt_file.readlines() #reading each line individually
 
@@ -74,11 +91,11 @@ class PineconeInteraction:
         
     def delete_namespace(self, namespace):
         self.index.delete(deleteAll='true', namespace=namespace)
-    
+
+
 def main():
     pi = PineconeInteraction()
-    
-    
+
     pi.corpus_embeddings('course_descriptions.txt')
 
 if __name__=='__main__':
