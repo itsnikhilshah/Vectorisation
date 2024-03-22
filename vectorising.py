@@ -92,49 +92,53 @@ class PineconeInteraction:
 
             print("Chunk "+str(i)+" has been upserted")
 
+
     def embedding_query_with_score(self):
-        folderpath="data\\roles"
+        folderpath = "data\\roles"
         if not os.path.exists("data\\excel"):
             os.mkdir('data\\excel')
+
+        # Load course IDs and descriptions from pickle
         with open('data\\course_data.pkl', 'rb') as f:
-            course_id_list, course_descriptions = pickle.load(f) # loading pickle file of the pre processed course id and course description
-        excel_data_df = pd.read_excel('data\\RefSheet.xlsx', sheet_name='Sheet1',usecols=['Name','Course ID'],index_col=0)
-        course_id_to_name =  excel_data_df.iloc[:, 0].to_dict()
-        course_id_to_name = {v: k for k, v in course_id_to_name.items()}
-        self.corpus_sentences=course_descriptions
-        for filename in glob.glob(os.path.join(folderpath,'*.txt')):
-            filename_sheet=filename
-            query_sentences=[] 
-            txt_file = open(filename,"r", encoding='utf8') #loading query file
-            for line in txt_file:
-                query_sentences.append(line.strip()) #storing query sequentially in a list
-            query_embeddings = self.model.encode(query_sentences).tolist() #vectorising the queries using roberta large
-            df = pd.DataFrame(columns=['KSAT', 'Course 1','Course Name 1','Score 1', 'Course 2','Course Name 2','Score 2', 'Course 3','Course Name 3','Score 3', 'Course 4','Course Name 4','Score 4','Course 5','Course Name 5','Score 5'])
+            course_id_list, course_descriptions = pickle.load(f)
+
+        # Load course ID to name mapping from pickle
+        with open('data\\course_id_to_name.pkl', 'rb') as f:
+            course_id_to_name = pickle.load(f)
+
+        self.corpus_sentences = course_descriptions
+
+        # Process each roles file
+        for filename in glob.glob(os.path.join(folderpath, '*.xlsx')):
+            df_roles = pd.read_excel(filename)
+            query_sentences = df_roles['description : String'].tolist()
+
+            query_embeddings = self.model.encode(query_sentences).tolist()
+
+            df = pd.DataFrame(columns=['KSAB', 'Course 1', 'Course Name 1', 'Score 1', 'Course 2', 'Course Name 2', 'Score 2', 'Course 3', 'Course Name 3', 'Score 3', 'Course 4', 'Course Name 4', 'Score 4', 'Course 5', 'Course Name 5', 'Score 5'])
 
             for query_embedding, query_sentence in zip(query_embeddings, query_sentences):
+                res = self.index.query(vector=query_embedding, namespace="course_descriptions", top_k=5, include_values=True)
 
-                #res = self.index.query(vector=query_embedding, namespace="course_descriptions", top_k=5, include_values=True)
-                res = self.index.query(vector=query_embedding, namespace="test", top_k=5, include_values=True)
-                # Extract the course IDs from the top 5 matches
+                # Extract the course IDs and scores
                 course_ids = [res_match.id for res_match in res.matches]
                 scores = [res_match.score for res_match in res.matches]
-                course_names = [course_id_to_name[course_id] if course_id in course_id_to_name else "Unknown" for course_id in course_ids]
+                course_names = [course_id_to_name.get(course_id, "Unknown") for course_id in course_ids]
 
-
-                # If fewer than 5 matches, fill the remaining slots with NaN
+                # Fill in NaN if fewer than 5 matches
                 while len(course_ids) < 5:
-                    course_ids.append(pd.np.nan)
-                    course_names.append(pd.np.nan)
-                    scores.append(pd.np.nan)
-                # Add a new row to the DataFrame
-                df.loc[len(df)] = [query_sentence] + [val for sublist in zip(course_ids, course_names, scores) for val in sublist]
+                    course_ids.append(pd.NA)
+                    course_names.append(pd.NA)
+                    scores.append(pd.NA)
 
-            
-            base = os.path.basename(filename_sheet)
+                df.loc[len(df)] = [query_sentence] + [val for pair in zip(course_ids, course_names, scores) for val in pair]
+
+            base = os.path.basename(filename)
             name, ext = os.path.splitext(base)
-            df.to_excel('data\\excel\\'+name+'.xlsx',sheet_name=name, index=False)
-            df=df.iloc[0:0]
-            print(name+" done")
+            df.to_excel(f'data\\excel\\{name}.xlsx', sheet_name=name, index=False)
+            df = df.iloc[0:0]
+            print(f"{name} done")
+
 
         
     def delete_namespace(self, namespace):
@@ -144,7 +148,8 @@ class PineconeInteraction:
 def main():
     pi = PineconeInteraction()
 
-    pi.corpus_embeddings('course_descriptions.txt')
+    #pi.corpus_embeddings('course_descriptions.txt')
+    pi.embedding_query_with_score()
 
 if __name__=='__main__':
     main()
