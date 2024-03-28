@@ -9,6 +9,7 @@ import configparser
 import os
 import pandas as pd
 import glob
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 def clean_course_desc(file_path):
@@ -93,6 +94,20 @@ class PineconeInteraction:
             print("Chunk "+str(i)+" has been upserted")
 
 
+    def compare_KSAB(self,roles,embedded_roles):
+        
+        print(roles)
+        
+    def compare_KSAB_test(self):
+        folderpath = "data\\roles"
+        print('start')
+        for filename in glob.glob(os.path.join(folderpath, '*.xlsx')):
+            df_roles = pd.read_excel(filename)
+            query_sentences = df_roles['description : String'].tolist()
+            query_embeddings = self.model.encode(query_sentences).tolist()
+            for embedding in query_embeddings:
+                print(embedding)
+                print(cosine_similarity(embedding.reshape(1,-1),query_embeddings))
     def embedding_query_with_score(self):
         folderpath = "data\\roles"
         if not os.path.exists("data\\excel"):
@@ -112,8 +127,8 @@ class PineconeInteraction:
         for filename in glob.glob(os.path.join(folderpath, '*.xlsx')):
             df_roles = pd.read_excel(filename)
             query_sentences = df_roles['description : String'].tolist()
-
             query_embeddings = self.model.encode(query_sentences).tolist()
+            self.compare_KSAB(query_sentence,query_embeddings)
 
             df = pd.DataFrame(columns=['KSAB', 'Course 1', 'Course Name 1', 'Score 1', 'Course 2', 'Course Name 2', 'Score 2', 'Course 3', 'Course Name 3', 'Score 3', 'Course 4', 'Course Name 4', 'Score 4', 'Course 5', 'Course Name 5', 'Score 5'])
 
@@ -147,9 +162,9 @@ class PineconeInteraction:
 
 def main():
     pi = PineconeInteraction()
-
     #pi.corpus_embeddings('course_descriptions.txt')
-    pi.embedding_query_with_score()
+    #pi.embedding_query_with_score()
+    pi.compare_KSAB_test()
 
 if __name__=='__main__':
     main()
