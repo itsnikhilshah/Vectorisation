@@ -216,7 +216,7 @@ def main():
     pi = PineconeInteraction()
     #pi.corpus_embeddings('course_descriptions.txt')
     #pi.embedding_query_with_score()
-    pi.compare_KSAB_test()
+    pi.compare_KSAB()
 
 if __name__=='__main__':
     main()
