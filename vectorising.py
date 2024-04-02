@@ -94,20 +94,72 @@ class PineconeInteraction:
             print("Chunk "+str(i)+" has been upserted")
 
 
-    def compare_KSAB(self,roles,embedded_roles):
         
-        print(roles)
-        
-    def compare_KSAB_test(self):
-        folderpath = "data\\roles"
+    def compare_KSAB(self):
+        folderpath = "data/roles"
         print('start')
+
+        if not os.path.exists("data\\combined_KSAB_excel"):
+            os.mkdir('data\\combined_KSAB_excel')
+
+
+        with open('data\\course_id_to_name.pkl', 'rb') as f:
+            course_id_to_name = pickle.load(f)
+
         for filename in glob.glob(os.path.join(folderpath, '*.xlsx')):
             df_roles = pd.read_excel(filename)
             query_sentences = df_roles['description : String'].tolist()
+            query_embeddings = self.model.encode(query_sentences)
+
+            similar_pairs = []
+
+            # Calculate cosine similarity for each pair of embeddings
+            for i, embedding1 in enumerate(query_embeddings):
+                for j in range(i + 1, len(query_embeddings)):
+                    similarity = cosine_similarity([embedding1], [query_embeddings[j]])[0][0]
+                    if similarity > 0.75:
+                        similar_pairs.append((i, j))
+
+            # Sort pairs for efficient processing
+            similar_pairs.sort()
+
+            # Combine the sentences in pairs and modify the query_sentences list
+            replaced_indices = set()
+            for i, j in similar_pairs:
+                if i not in replaced_indices and j not in replaced_indices:
+                    concatenated_sentence = query_sentences[i] + " " + query_sentences[j]
+                    query_sentences[i] = concatenated_sentence
+                    replaced_indices.add(j)
+
+            # Remove the replaced indices from the query_sentences
+            query_sentences = [sentence for idx, sentence in enumerate(query_sentences) if idx not in replaced_indices]
             query_embeddings = self.model.encode(query_sentences).tolist()
-            for embedding in query_embeddings:
-                print(embedding)
-                print(cosine_similarity(embedding.reshape(1,-1),query_embeddings))
+
+
+            df = pd.DataFrame(columns=['KSAB', 'Course 1', 'Course Name 1', 'Score 1', 'Course 2', 'Course Name 2', 'Score 2', 'Course 3', 'Course Name 3', 'Score 3', 'Course 4', 'Course Name 4', 'Score 4', 'Course 5', 'Course Name 5', 'Score 5'])
+
+            for query_embedding, query_sentence in zip(query_embeddings, query_sentences):
+                res = self.index.query(vector=query_embedding, namespace="course_descriptions", top_k=5, include_values=True)
+
+                # Extract the course IDs and scores
+                course_ids = [res_match.id for res_match in res.matches]
+                scores = [res_match.score for res_match in res.matches]
+                course_names = [course_id_to_name.get(course_id, "Unknown") for course_id in course_ids]
+
+                # Fill in NaN if fewer than 5 matches
+                while len(course_ids) < 5:
+                    course_ids.append(pd.NA)
+                    course_names.append(pd.NA)
+                    scores.append(pd.NA)
+
+                df.loc[len(df)] = [query_sentence] + [val for pair in zip(course_ids, course_names, scores) for val in pair]
+            
+            base = os.path.basename(filename)
+            name, ext = os.path.splitext(base)
+            df.to_excel(f'data\\combined_KSAB_excel\\{name}.xlsx', sheet_name=name, index=False)
+            df = df.iloc[0:0]
+            print(f"{name} done")
+    
     def embedding_query_with_score(self):
         folderpath = "data\\roles"
         if not os.path.exists("data\\excel"):
@@ -128,7 +180,7 @@ class PineconeInteraction:
             df_roles = pd.read_excel(filename)
             query_sentences = df_roles['description : String'].tolist()
             query_embeddings = self.model.encode(query_sentences).tolist()
-            self.compare_KSAB(query_sentence,query_embeddings)
+
 
             df = pd.DataFrame(columns=['KSAB', 'Course 1', 'Course Name 1', 'Score 1', 'Course 2', 'Course Name 2', 'Score 2', 'Course 3', 'Course Name 3', 'Score 3', 'Course 4', 'Course Name 4', 'Score 4', 'Course 5', 'Course Name 5', 'Score 5'])
 
