@@ -10,6 +10,33 @@ import os
 import pandas as pd
 import glob
 from sklearn.metrics.pairwise import cosine_similarity
+import openpyxl
+from openpyxl.styles import PatternFill
+
+def color_identical_cells_in_excel(folder_path):
+    # Define the color fill for identical cells
+    light_green_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')
+
+    # Iterate over all .xlsx files in the folder
+    for file in glob.glob(f"{folder_path}/*.xlsx"):
+        workbook = openpyxl.load_workbook(file)
+        
+        for sheet in workbook.sheetnames:
+            worksheet = workbook[sheet]
+
+            # Iterate through each cell in the sheet
+            for row in worksheet.iter_rows():
+                for cell in row:
+                    # Compare with every other cell
+                    for row_compare in worksheet.iter_rows():
+                        for cell_compare in row_compare:
+                            # If the cells are not the same and have the same value
+                            if cell != cell_compare and cell.value == cell_compare.value:
+                                cell.fill = light_green_fill
+                                cell_compare.fill = light_green_fill
+        
+        # Save the changes
+        workbook.save(file)
 
 
 def clean_course_desc(file_path):
@@ -217,6 +244,7 @@ def main():
     #pi.corpus_embeddings('course_descriptions.txt')
     #pi.embedding_query_with_score()
     pi.compare_KSAB()
+    color_identical_cells_in_excel(f'data\\combined_KSAB_excel')
 
 if __name__=='__main__':
     main()
