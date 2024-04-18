@@ -12,10 +12,11 @@ import glob
 from sklearn.metrics.pairwise import cosine_similarity
 import openpyxl
 from openpyxl.styles import PatternFill
+import re
 
 def color_identical_cells_in_excel(folder_path):
-    # Define the color fill for identical cells
     light_green_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')
+    header_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')  # Yellow for headers
 
     # Iterate over all .xlsx files in the folder
     for file in glob.glob(f"{folder_path}/*.xlsx"):
@@ -24,20 +25,32 @@ def color_identical_cells_in_excel(folder_path):
         for sheet in workbook.sheetnames:
             worksheet = workbook[sheet]
 
-            # Iterate through each cell in the sheet
-            for row in worksheet.iter_rows():
-                for cell in row:
-                    # Compare with every other cell
-                    for row_compare in worksheet.iter_rows():
-                        for cell_compare in row_compare:
-                            # If the cells are not the same and have the same value
-                            if cell != cell_compare and cell.value == cell_compare.value:
-                                cell.fill = light_green_fill
-                                cell_compare.fill = light_green_fill
+            # Apply header color to the first row
+            if worksheet.max_row > 0:
+                for cell in worksheet[1]:
+                    cell.fill = header_fill
+
+            # Collect columns indices that start with "Course"
+            course_columns = []
+            if worksheet.max_row > 0:
+                for col in worksheet.iter_cols(1, worksheet.max_column):
+                    if col[0].value and re.fullmatch(r"Course \d+", col[0].value):
+                        course_columns.append(col[0].column)
+
+
+            # Iterate through each cell in identified Course columns
+            for col_index in course_columns:
+                cells = [cell for cell in worksheet.iter_cols(min_col=col_index, max_col=col_index, min_row=2, max_row=worksheet.max_row)]
+                for cell_group in cells:
+                    for cell in cell_group:
+                        for compare_group in cells:
+                            for compare_cell in compare_group:
+                                if cell != compare_cell and cell.value == compare_cell.value:
+                                    cell.fill = light_green_fill
+                                    compare_cell.fill = light_green_fill
         
         # Save the changes
         workbook.save(file)
-
 
 def clean_course_desc(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -269,7 +282,7 @@ def main():
     pi = PineconeInteraction()
     #pi.corpus_embeddings('course_descriptions.txt')
     #pi.embedding_query_with_score()
-    #pi.compare_KSAB()
+    pi.compare_KSAB()
     color_identical_cells_in_excel(f'data\\combined_KSAB_excel')
 
 if __name__=='__main__':
