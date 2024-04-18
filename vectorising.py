@@ -129,7 +129,6 @@ class PineconeInteraction:
         if not os.path.exists("data\\combined_KSAB_excel"):
             os.mkdir('data\\combined_KSAB_excel')
 
-
         with open('data\\course_id_to_name.pkl', 'rb') as f:
             course_id_to_name = pickle.load(f)
 
@@ -162,31 +161,38 @@ class PineconeInteraction:
             query_sentences = [sentence for idx, sentence in enumerate(query_sentences) if idx not in replaced_indices]
             query_embeddings = self.model.encode(query_sentences).tolist()
 
-
-            df = pd.DataFrame(columns=['KSAB', 'Course 1', 'Course Name 1', 'Score 1', 'Course 2', 'Course Name 2', 'Score 2', 'Course 3', 'Course Name 3', 'Score 3', 'Course 4', 'Course Name 4', 'Score 4', 'Course 5', 'Course Name 5', 'Score 5'])
+            base_url = "https://dau-stg.csod.com/ui/lms-learning-details/app/onlineContent/"
+            df = pd.DataFrame()
 
             for query_embedding, query_sentence in zip(query_embeddings, query_sentences):
                 res = self.index.query(vector=query_embedding, namespace="course_descriptions", top_k=5, include_values=True)
 
-                # Extract the course IDs and scores
+                # Extract the course IDs, scores, and generate course links
                 course_ids = [res_match.id for res_match in res.matches]
                 scores = [res_match.score for res_match in res.matches]
                 course_names = [course_id_to_name.get(course_id, "Unknown") for course_id in course_ids]
+                course_links = [base_url + course_id for course_id in course_ids]
 
                 # Fill in NaN if fewer than 5 matches
                 while len(course_ids) < 5:
                     course_ids.append(pd.NA)
                     course_names.append(pd.NA)
                     scores.append(pd.NA)
+                    course_links.append(pd.NA)
 
-                df.loc[len(df)] = [query_sentence] + [val for pair in zip(course_ids, course_names, scores) for val in pair]
-            
+                # Add data to the DataFrame
+                data = []
+                for i in range(5):
+                    data.extend([course_ids[i], course_names[i], scores[i], course_links[i]])
+
+                df.loc[len(df)] = [query_sentence] + data
+
             base = os.path.basename(filename)
             name, ext = os.path.splitext(base)
             df.to_excel(f'data\\combined_KSAB_excel\\{name}.xlsx', sheet_name=name, index=False)
             df = df.iloc[0:0]
             print(f"{name} done")
-    
+
     def embedding_query_with_score(self):
         folderpath = "data\\roles"
         if not os.path.exists("data\\excel"):
