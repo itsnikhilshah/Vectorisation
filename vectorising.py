@@ -17,6 +17,7 @@ import re
 def color_identical_cells_in_excel(folder_path):
     light_green_fill = PatternFill(start_color='90EE90', end_color='90EE90', fill_type='solid')
     header_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')  # Yellow for headers
+    blue_fill= PatternFill(start_color='3297A8', end_color='3297A8', fill_type='solid')
 
     # Iterate over all .xlsx files in the folder
     for file in glob.glob(f"{folder_path}/*.xlsx"):
@@ -37,6 +38,15 @@ def color_identical_cells_in_excel(folder_path):
                     if col[0].value and re.fullmatch(r"Course \d+", col[0].value):
                         course_columns.append(col[0].column)
 
+            course_name_columns=[]
+
+            if worksheet.max_row > 0:
+                for col in worksheet.iter_cols(1, worksheet.max_column):
+                    if col[0].value and re.fullmatch(r"Course Name \d+", col[0].value):
+                        course_name_columns.append(col[0].column)
+
+
+
 
             # Iterate through each cell in identified Course columns
             for col_index in course_columns:
@@ -48,6 +58,16 @@ def color_identical_cells_in_excel(folder_path):
                                 if cell != compare_cell and cell.value == compare_cell.value:
                                     cell.fill = light_green_fill
                                     compare_cell.fill = light_green_fill
+            
+            for col_index in course_name_columns:
+                cells = [cell for cell in worksheet.iter_cols(min_col=col_index, max_col=col_index, min_row=2, max_row=worksheet.max_row)]
+                for cell_group in cells:
+                    for cell in cell_group:
+                        for compare_group in cells:
+                            for compare_cell in compare_group:
+                                if cell != compare_cell and cell.value == compare_cell.value:
+                                    cell.fill = blue_fill
+                                    compare_cell.fill = blue_fill
         
         # Save the changes
         workbook.save(file)
@@ -282,8 +302,8 @@ def main():
     pi = PineconeInteraction()
     #pi.corpus_embeddings('course_descriptions.txt')
     #pi.embedding_query_with_score()
-    pi.compare_KSAB()
-    color_identical_cells_in_excel(f'data\\combined_KSAB_excel')
+    #pi.compare_KSAB()
+    color_identical_cells_in_excel(f'data\\excel')
 
 if __name__=='__main__':
     main()
