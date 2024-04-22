@@ -72,6 +72,72 @@ def color_identical_cells_in_excel(folder_path):
         # Save the changes
         workbook.save(file)
 
+def pivot_table(folder_path, output_filename="pivot_table_output.xlsx"):
+    # Check if the specified folder exists
+    if not os.path.exists(folder_path):
+        print(f"The folder '{folder_path}' does not exist.")
+        return
+    
+    # Gather all Excel files in the folder
+    files = glob.glob(os.path.join(folder_path, "*.xlsx"))
+    if not files:
+        print("No Excel files found in the folder.")
+        return
+
+    # List to collect data frames for all courses
+    course_details = []
+
+    # Process each file
+    for file in files:
+        # Read the Excel file
+        df = pd.read_excel(file)
+
+        # Identify columns for 'Course Name' and 'Course Link'
+        course_name_cols = [col for col in df.columns if 'Course Name' in col]
+        course_link_cols = [col.replace('Name', 'Link') for col in course_name_cols if col.replace('Name', 'Link') in df.columns]
+
+        # Collect data from identified columns
+        for name_col, link_col in zip(course_name_cols, course_link_cols):
+            # Ensure both columns exist before accessing them
+            if name_col in df.columns and link_col in df.columns:
+                course_details.extend(df[[name_col, link_col]].dropna().values.tolist())
+
+    # Create a DataFrame from the list of course details
+    if course_details:
+        course_details_df = pd.DataFrame(course_details, columns=['Course Name', 'Course Link'])
+
+        # Group data by 'Course Name' and find the most common 'Course Link' for each 'Course Name'
+        course_pivot = course_details_df.groupby('Course Name')['Course Link'].agg(
+            lambda x: x.mode().iloc[0] if not x.mode().empty else pd.NA
+        ).reset_index()
+
+        # Count frequencies of course names
+        course_pivot['Frequency'] = course_details_df['Course Name'].value_counts().reindex(course_pivot['Course Name']).values
+
+        # Sort the DataFrame by 'Frequency' in descending order
+        course_pivot = course_pivot.sort_values(by='Frequency', ascending=False)
+
+        # Define the output file path within the same folder
+        output_file = os.path.join(folder_path, output_filename)
+
+        # Save the pivot table to an Excel file
+        try:
+            course_pivot.to_excel(output_file, sheet_name='Pivot Table', index=False)
+            print(f"Pivot table saved to {output_file}")
+        except Exception as e:
+            print(f"Failed to save the pivot table: {e}")
+    else:
+        print("No course data available to create a pivot table.")
+
+    header_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
+    workbook = openpyxl.load_workbook(output_file)
+    for sheet in workbook.sheetnames:
+        worksheet = workbook[sheet]
+        if worksheet.max_row > 0:
+            for cell in worksheet[1]:
+                cell.fill = header_fill
+    workbook.save(output_file)
+
 def clean_course_desc(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         lines = file.readlines()
@@ -86,50 +152,6 @@ def clean_course_desc(file_path):
 
     with open(file_path, 'w', encoding='utf-8') as file:
         file.writelines(corrected_lines)
-
-def create_pivot_table_from_excel(folder_path):
-    # List to hold all dataframes
-    all_dfs = []
-    
-    # Iterate over all .xlsx files in the folder
-    for file in glob.glob(os.path.join(folder_path, "*.xlsx")):
-        # Read the Excel file
-        df = pd.read_excel(file)
-        
-        # Append the dataframe to the list
-        all_dfs.append(df)
-
-    # Concatenate all dataframes into a single dataframe
-    combined_df = pd.concat(all_dfs, ignore_index=True)
-    
-    # Filter columns that contain 'Course Name' in their header
-    course_name_columns = [col for col in combined_df.columns if 'Course Name' in col]
-    course_name_data = combined_df[course_name_columns]
-
-    # Flatten the DataFrame to get a series of all course names
-    flat_course_names = course_name_data.stack().reset_index(drop=True)
-
-    # Create a DataFrame from the series to count occurrences
-    course_name_counts = flat_course_names.value_counts().reset_index()
-    course_name_counts.columns = ['Course Name', 'Frequency']
-
-    # Create a pivot table (which is basically the frequency count in this case)
-    pivot_table = course_name_counts.pivot_table(index='Course Name', values='Frequency', aggfunc='sum')
-
-    pivot_table = pivot_table.sort_values(by='Frequency', ascending=False)
-
-    output_location=folder_path+'\\pivot_table.xlsx'
-    pivot_table.to_excel(output_location, sheet_name='Pivot Table')
-    
-    header_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
-    workbook = openpyxl.load_workbook(output_location)
-    for sheet in workbook.sheetnames:
-        worksheet = workbook[sheet]
-
-        # Apply header color to the first row
-        if worksheet.max_row > 0:
-            for cell in worksheet[1]:
-                cell.fill = header_fill
 
 
 class PineconeInteraction:
@@ -348,7 +370,8 @@ def main():
     #pi.embedding_query_with_score()
     #pi.compare_KSAB()
     #color_identical_cells_in_excel(f'data\\excel')
-    create_pivot_table_from_excel(f'data\\excel')
+    #create_pivot_table_from_excel(f'data\\excel')
+    pivot_table(f'data\\excel')
 
 if __name__=='__main__':
     main()
